@@ -1,0 +1,91 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <link rel="Stylesheet" type="text/css" href="/static/css/style.css">
+    <link rel="Stylesheet" type="text/css" href="/static/css/tango.css">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="alternate" type="application/atom+xml" href="atom.xml" title="Atom feed">
+    <title>2018-01-18-install-a-centos-container(rootfs)-on-centos - </title>
+    <meta name="keywords" content=""/>
+    <meta name="description" content=""/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  </head>
+
+  <body>
+    <div id="container">
+      
+<div id="header">
+  <div class="post-nav"><a href="/">Home</a>&nbsp;&#187;&nbsp;<a href="/#Note">Note</a>&nbsp;&#187;&nbsp;2018-01-18-install-a-centos-container(rootfs)-on-centos
+    <span class="updated">Page Updated&nbsp;
+      2018-01-18 14:40
+    </span></div>
+</div>
+<div class="clearfix"></div>
+
+<div class="page_title">2018-01-18-install-a-centos-container(rootfs)-on-centos</div>
+
+  <p>this Note is about how to install a centos root filesystem on centos and run it with systemd-nspwan as a container </p>
+<h3 id="create-a-directory-to-install-centos-in">create a directory to install centos in</h3>
+<div class="hlcode"><pre><span class="c">#mkdir /centos_chroot</span>
+<span class="c">#mkdir -p /centos_chroot/var/lib/rpm</span>
+</pre></div>
+
+
+<h3 id="create-the-rpm-database">create the rpm database</h3>
+<div class="hlcode"><pre><span class="c">#rpm --rebuilddb --root=/centos_chroot/</span>
+</pre></div>
+
+
+<h3 id="get-centos-release-versionel7centos210x86_64rpm-from-network">get centos-release-{version}.el7.centos.2.10.x86_64.rpm from network</h3>
+<p>may from <a href="https://centos.pkgs.org/7/centos-x86_64/centos-release-7-4.1708.el7.centos.x86_64.rpm.html"> here </a> or <a href="http://rpm.pbone.net/index.php3/stat/4/idpl/31977512/dir/centos_7/com/centos-release-7-2.1511.el7.centos.2.10.x86_64.rpm.html"> here </a></p>
+<h3 id="use-rpm-and-yum-to-install-centos-to-centos_chroot">use rpm and yum to install centos to centos_chroot</h3>
+<div class="hlcode"><pre><span class="c">#rpm -i --root=/centos_chroot --nodeps centos-release-{version}.centos.2.10.x86_64.rpm</span>
+<span class="c">#yum --installroot=/centos_chroot groups install -y -q &#39;Minimal Install&#39;</span>
+</pre></div>
+
+
+<h3 id="set-the-password-for-the-root-user">Set the password for the root user</h3>
+<div class="hlcode"><pre><span class="c">#chroot /centos_chroot passwd root //make sure the host&#39;s selinux is closed</span>
+</pre></div>
+
+
+<h3 id="boot-the-centos-via-systemd-nspawn">boot the centos via systemd-nspawn</h3>
+<div class="hlcode"><pre><span class="c">#systemd-nspawn -D /centos_chroot -b</span>
+</pre></div>
+
+
+<p>then just like work in a virtual mechine</p>
+<h3 id="kill-the-container">kill the container</h3>
+<p>in another window </p>
+<div class="hlcode"><pre><span class="c">#machinectl poweroff centos_chroot</span>
+</pre></div>
+
+
+<h3 id="production">production</h3>
+<p>just package the centos_chroot directory and copy the package to the target machine, unpackage it,and then:</p>
+<div class="hlcode"><pre><span class="c">#systemd-nspawn -D /centos_chroot -b</span>
+</pre></div>
+
+
+<p>everything is almost done</p>
+<h3 id="issues">issues</h3>
+<ol>
+<li>the package maybe large, when installed centos, centos_chroot take up 1.3G storage, after installed papi, mysql and nginx, it take up 2.3G.</li>
+<li>the container and the host share the same network defaultly(also may be configuraed to use NAT or brige), need take case the conflict of network ports.</li>
+<li>container are limit to modify some fs,such as proc.</li>
+<li>there maybe other unknown subtle tricks. </li>
+</ol>
+    </div>
+    <div id="footer">
+      <span>
+        <p>Copyright © 2018 .
+        Powered by <a href="http://simiki.org/" target="_blank">Simiki</a>.</p>
+        <p>Site Generated 2018-01-18 15:13:00</p>
+      </span>
+    </div>
+
+    
+    
+  </body>
+</html>
