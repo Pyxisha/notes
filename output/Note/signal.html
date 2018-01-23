@@ -1,0 +1,142 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <link rel="Stylesheet" type="text/css" href="/static/css/style.css">
+    <link rel="Stylesheet" type="text/css" href="/static/css/tango.css">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="alternate" type="application/atom+xml" href="atom.xml" title="Atom feed">
+    <title>2018-01-23-when-signal-handler-is-executed - </title>
+    <meta name="keywords" content=""/>
+    <meta name="description" content=""/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  </head>
+
+  <body>
+    <div id="container">
+      
+<div id="header">
+  <div class="post-nav"><a href="/">Home</a>&nbsp;&#187;&nbsp;<a href="/#Note">Note</a>&nbsp;&#187;&nbsp;2018-01-23-when-signal-handler-is-executed
+    <span class="updated">Page Updated&nbsp;
+      2018-01-23 15:24
+    </span></div>
+</div>
+<div class="clearfix"></div>
+
+<div class="page_title">2018-01-23-when-signal-handler-is-executed</div>
+
+  <h3 id="when-signal-handler-is-executed">when signal handler is executed</h3>
+<p>I'm always confusion that signal is like a interrupt, but it's can't be a real interrupt. after google and study the kernel code. the conclusion is when a process switch from kernel mode to user mode.</p>
+<h3 id="study-of-the-kernel-code">study of the kernel code</h3>
+<p>the kernel version is 4.14</p>
+<p>the code of dealing a syscall is in arch/x86/entry/common.c</p>
+<div class="hlcode"><pre><span class="nx">__visible</span> <span class="k">void</span> <span class="nx">do_syscall_64</span><span class="p">(</span><span class="nx">struct</span> <span class="nx">pt_regs</span> <span class="o">*</span><span class="nx">regs</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="nx">struct</span> <span class="nx">thread_info</span> <span class="o">*</span><span class="nx">ti</span> <span class="o">=</span> <span class="nx">current_thread_info</span><span class="p">();</span>
+    <span class="nx">unsigned</span> <span class="kr">long</span> <span class="nx">nr</span> <span class="o">=</span> <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">orig_ax</span><span class="p">;</span>
+
+    <span class="nx">enter_from_user_mode</span><span class="p">();</span>
+    <span class="nx">local_irq_enable</span><span class="p">();</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="nx">READ_ONCE</span><span class="p">(</span><span class="nx">ti</span><span class="o">-&gt;</span><span class="nx">flags</span><span class="p">)</span> <span class="o">&amp;</span> <span class="nx">_TIF_WORK_SYSCALL_ENTRY</span><span class="p">)</span>
+        <span class="nx">nr</span> <span class="o">=</span> <span class="nx">syscall_trace_enter</span><span class="p">(</span><span class="nx">regs</span><span class="p">);</span>
+
+    <span class="cm">/*</span>
+<span class="cm">     * NB: Native and x32 syscalls are dispatched from the same</span>
+<span class="cm">     * table.  The only functional difference is the x32 bit in</span>
+<span class="cm">     * regs-&gt;orig_ax, which changes the behavior of some syscalls.</span>
+<span class="cm">     */</span>
+    <span class="k">if</span> <span class="p">(</span><span class="nx">likely</span><span class="p">((</span><span class="nx">nr</span> <span class="o">&amp;</span> <span class="nx">__SYSCALL_MASK</span><span class="p">)</span> <span class="o">&lt;</span> <span class="nx">NR_syscalls</span><span class="p">))</span> <span class="p">{</span>
+        <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">ax</span> <span class="o">=</span> <span class="nx">sys_call_table</span><span class="cp">[</span><span class="nx">nr</span> <span class="o">&amp;</span> <span class="nx">__SYSCALL_MASK</span><span class="cp">]</span><span class="p">(</span>
+            <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">di</span><span class="p">,</span> <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">si</span><span class="p">,</span> <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">dx</span><span class="p">,</span>
+            <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">r10</span><span class="p">,</span> <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">r8</span><span class="p">,</span> <span class="nx">regs</span><span class="o">-&gt;</span><span class="nx">r9</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="nx">syscall_return_slowpath</span><span class="p">(</span><span class="nx">regs</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>the <code>do_syscall_64</code> call <code>syscall_return_slowpath</code> to return from a syscall:</p>
+<div class="hlcode"><pre><span class="n">__visible</span> <span class="kr">inline</span> <span class="kt">void</span> <span class="nf">syscall_return_slowpath</span><span class="p">(</span><span class="k">struct</span> <span class="n">pt_regs</span> <span class="o">*</span><span class="n">regs</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="k">struct</span> <span class="n">thread_info</span> <span class="o">*</span><span class="n">ti</span> <span class="o">=</span> <span class="n">current_thread_info</span><span class="p">();</span>
+    <span class="n">u32</span> <span class="n">cached_flags</span> <span class="o">=</span> <span class="n">READ_ONCE</span><span class="p">(</span><span class="n">ti</span><span class="o">-&gt;</span><span class="n">flags</span><span class="p">);</span>
+
+    <span class="n">CT_WARN_ON</span><span class="p">(</span><span class="n">ct_state</span><span class="p">()</span> <span class="o">!=</span> <span class="n">CONTEXT_KERNEL</span><span class="p">);</span>
+
+    <span class="k">if</span> <span class="p">(</span><span class="n">IS_ENABLED</span><span class="p">(</span><span class="n">CONFIG_PROVE_LOCKING</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+        <span class="n">WARN</span><span class="p">(</span><span class="n">irqs_disabled</span><span class="p">(),</span> <span class="s">&quot;syscall %ld left IRQs disabled&quot;</span><span class="p">,</span> <span class="n">regs</span><span class="o">-&gt;</span><span class="n">orig_ax</span><span class="p">))</span>
+        <span class="n">local_irq_enable</span><span class="p">();</span>
+
+    <span class="cm">/*</span>
+<span class="cm">     * First do one-time work.  If these work items are enabled, we</span>
+<span class="cm">     * want to run them exactly once per syscall exit with IRQs on.</span>
+<span class="cm">     */</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">unlikely</span><span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">SYSCALL_EXIT_WORK_FLAGS</span><span class="p">))</span>
+        <span class="n">syscall_slow_exit_work</span><span class="p">(</span><span class="n">regs</span><span class="p">,</span> <span class="n">cached_flags</span><span class="p">);</span>
+
+    <span class="n">local_irq_disable</span><span class="p">();</span>
+    <span class="n">prepare_exit_to_usermode</span><span class="p">(</span><span class="n">regs</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>the <code>syscall_return_slowpath</code> call <code>prepare_exit_to_usermode</code> to check if there is extra work to if there is call <code>exit_to_usermode_loop</code> to do the work, and the pending signals is handled here.</p>
+<div class="hlcode"><pre><span class="k">static</span> <span class="kt">void</span> <span class="nf">exit_to_usermode_loop</span><span class="p">(</span><span class="k">struct</span> <span class="n">pt_regs</span> <span class="o">*</span><span class="n">regs</span><span class="p">,</span> <span class="n">u32</span> <span class="n">cached_flags</span><span class="p">)</span>
+<span class="p">{</span>
+    <span class="cm">/*</span>
+<span class="cm">     * In order to return to user mode, we need to have IRQs off with</span>
+<span class="cm">     * none of EXIT_TO_USERMODE_LOOP_FLAGS set.  Several of these flags</span>
+<span class="cm">     * can be set at any time on preemptable kernels if we have IRQs on,</span>
+<span class="cm">     * so we need to loop.  Disabling preemption wouldn&#39;t help: doing the</span>
+<span class="cm">     * work to clear some of the flags can sleep.</span>
+<span class="cm">     */</span>
+    <span class="k">while</span> <span class="p">(</span><span class="nb">true</span><span class="p">)</span> <span class="p">{</span>
+        <span class="cm">/* We have work to do. */</span>
+        <span class="n">local_irq_enable</span><span class="p">();</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">_TIF_NEED_RESCHED</span><span class="p">)</span>
+            <span class="n">schedule</span><span class="p">();</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">_TIF_UPROBE</span><span class="p">)</span>
+            <span class="n">uprobe_notify_resume</span><span class="p">(</span><span class="n">regs</span><span class="p">);</span>
+
+        <span class="cm">/* deal with pending signal delivery */</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">_TIF_SIGPENDING</span><span class="p">)</span>
+            <span class="n">do_signal</span><span class="p">(</span><span class="n">regs</span><span class="p">);</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">_TIF_NOTIFY_RESUME</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">clear_thread_flag</span><span class="p">(</span><span class="n">TIF_NOTIFY_RESUME</span><span class="p">);</span>
+            <span class="n">tracehook_notify_resume</span><span class="p">(</span><span class="n">regs</span><span class="p">);</span>
+        <span class="p">}</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">_TIF_USER_RETURN_NOTIFY</span><span class="p">)</span>
+            <span class="n">fire_user_return_notifiers</span><span class="p">();</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">_TIF_PATCH_PENDING</span><span class="p">)</span>
+            <span class="n">klp_update_patch_state</span><span class="p">(</span><span class="n">current</span><span class="p">);</span>
+
+        <span class="cm">/* Disable IRQs and retry */</span>
+        <span class="n">local_irq_disable</span><span class="p">();</span>
+
+        <span class="n">cached_flags</span> <span class="o">=</span> <span class="n">READ_ONCE</span><span class="p">(</span><span class="n">current_thread_info</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">flags</span><span class="p">);</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="p">(</span><span class="n">cached_flags</span> <span class="o">&amp;</span> <span class="n">EXIT_TO_USERMODE_LOOP_FLAGS</span><span class="p">))</span>
+            <span class="k">break</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+    </div>
+    <div id="footer">
+      <span>
+        <p>Copyright © 2018 .
+        Powered by <a href="http://simiki.org/" target="_blank">Simiki</a>.</p>
+        <p>Site Generated 2018-01-23 15:42:40</p>
+      </span>
+    </div>
+
+    
+    
+  </body>
+</html>
