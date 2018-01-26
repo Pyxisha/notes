@@ -1,5 +1,5 @@
 ---
-title: "2018-01-18-markdown"
+title: "2018-01-18 markdown"
 date: 2018-01-18 12:35
 ---
 

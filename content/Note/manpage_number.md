@@ -1,5 +1,5 @@
 ---
-title: "2018-01-23-meaning-of-the-number-between-parentheses-in-manpages"
+title: "2018-01-23 meaning of the number between parentheses in manpages"
 date: 2018-01-23 11:16
 ---
 

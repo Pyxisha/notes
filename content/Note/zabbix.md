@@ -1,5 +1,5 @@
 ---
-title: "2018-01-11-how-to-use-zabbix"
+title: "2018-01-11 how to use zabbix"
 date: 2018-01-12 16:06
 ---
 

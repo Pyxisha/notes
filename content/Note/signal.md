@@ -1,5 +1,5 @@
 ---
-title: "2018-01-23-when-signal-handler-is-executed"
+title: "2018-01-23 when signal handler is executed"
 date: 2018-01-23 15:24
 ---
 

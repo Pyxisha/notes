@@ -1,5 +1,5 @@
 ---
-title: "2018-01-18-install-a-centos-container(rootfs)-on-centos"
+title: "2018-01-18 install a centos container(rootfs) on centos"
 date: 2018-01-18 14:40
 ---
 

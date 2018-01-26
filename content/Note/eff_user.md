@@ -1,5 +1,5 @@
 ---
-title: "2018-01-17-effictive-user-and-real-user"
+title: "2018-01-17 effictive user and real user"
 date: 2018-01-17 21:56
 ---
 

@@ -1,5 +1,5 @@
 ---
-title: "2018-01-18-how-to-install-mysql-on-centos"
+title: "2018-01-18 how to install mysql on centos"
 date: 2018-01-18 12:29
 ---
 
