@@ -1,0 +1,123 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <link rel="Stylesheet" type="text/css" href="/static/css/style.css">
+    <link rel="Stylesheet" type="text/css" href="/static/css/tango.css">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="alternate" type="application/atom+xml" href="atom.xml" title="Atom feed">
+    <title>2018-07-25 the vfork syscall - </title>
+    <meta name="keywords" content=""/>
+    <meta name="description" content=""/>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  </head>
+
+  <body>
+    <div id="container">
+      
+<div id="header">
+  <div class="post-nav"><a href="/">Home</a>&nbsp;&#187;&nbsp;<a href="/#Note">Note</a>&nbsp;&#187;&nbsp;2018-07-25 the vfork syscall
+    <span class="updated">Page Updated&nbsp;
+      2018-07-25 22:44
+    </span></div>
+</div>
+<div class="clearfix"></div>
+
+<div class="page_title">2018-07-25 the vfork syscall</div>
+
+  <h2 id="vfork-vs-fork">vfork vs fork</h2>
+<p>like fork, vfork is a syscall to create a new process in Unix System. In the book <em>Advanced Programming in the Unix like Environment</em>, it says there two main difference between fork and vfork:</p>
+<ul>
+<li>the child process created by vfork share the same address space with the parent process.</li>
+<li>vfork will guarantees the child process run first, until the child call exec or exit.</li>
+</ul>
+<p>we can use the follow program to test these two points:</p>
+<div class="hlcode"><pre><span class="cp">#include &lt;unistd.h&gt;</span>
+<span class="cp">#include &lt;stdio.h&gt;</span>
+<span class="cp">#include &lt;stdlib.h&gt;</span>
+
+<span class="kt">int</span> <span class="n">globval</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="kt">int</span> <span class="n">var</span><span class="p">;</span>
+    <span class="kt">pid_t</span> <span class="n">pid</span><span class="p">;</span>
+    <span class="n">var</span> <span class="o">=</span> <span class="mi">89</span><span class="p">;</span>
+
+    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;before vfork</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+    <span class="k">if</span><span class="p">((</span><span class="n">pid</span> <span class="o">=</span> <span class="n">vfork</span><span class="p">())</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">){</span>
+        <span class="n">printf</span><span class="p">(</span><span class="s">&quot;vfork error</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+        <span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="p">}</span><span class="k">else</span> <span class="k">if</span><span class="p">(</span><span class="n">pid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">){</span> <span class="c1">// child</span>
+        <span class="n">globval</span><span class="o">++</span><span class="p">;</span>
+        <span class="n">var</span><span class="o">++</span><span class="p">;</span>
+        <span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;global = %d, var = %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">globval</span><span class="p">,</span> <span class="n">var</span><span class="p">);</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>the follow shows consequence in debian with 4.9 kernel:</p>
+<p><img alt="cons1" src="/images/vfork1.png" /></p>
+<p>we can see child ran first and child did share the same address space.</p>
+<h2 id="the-implemetion">the implemetion</h2>
+<p>the discussion is based on 3.10 kernel source code</p>
+<p>both fork and vfork are define in kernel/fork.c.</p>
+<p><img alt="forks" src="/images/forks.png" /></p>
+<p>both fork and vfork will call do_fork,  the only difference between fork and vfork in kernel source code is that vfork has two more flags: CLONE_VFORK and CLONE_VM;</p>
+<p>if CLONE_VM flag is given, the mm_struct of process's task_struct will not be dupped, only the user_num of mm_struct will increase 1. here is the piece of code of copy_mm function in kernel/fork.c.</p>
+<p><img alt="copy_mm" src="/images/copy_mm.png" /></p>
+<p>almost in the end of do_fork function, we can see if CLONE_VFORK flag is given, child process will be wake up first and parent will wait child to fork done.</p>
+<p><img alt="clone_vfork" src="/images/clone_vfork.png" /> </p>
+<h2 id="a-trick-when-vfork-are-called-inside-a-function">a trick when vfork are called inside a function</h2>
+<p>see the follow function:</p>
+<div class="hlcode"><pre><span class="cp">#include &lt;unistd.h&gt;</span>
+<span class="cp">#include &lt;stdio.h&gt;</span>
+<span class="cp">#include &lt;stdlib.h&gt;</span>
+
+<span class="kt">void</span> <span class="nf">test_fork</span><span class="p">(){</span>
+    <span class="kt">int</span> <span class="n">s</span> <span class="o">=</span> <span class="mi">1984</span><span class="p">;</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;before vfork</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+    <span class="kt">pid_t</span> <span class="n">pid</span> <span class="o">=</span> <span class="n">vfork</span><span class="p">();</span>
+    <span class="k">if</span><span class="p">(</span><span class="n">pid</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">){</span>
+        <span class="n">printf</span><span class="p">(</span><span class="s">&quot;vfork error</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+        <span class="n">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+    <span class="p">}</span><span class="k">else</span> <span class="k">if</span><span class="p">(</span><span class="n">pid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">){</span>
+        <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="p">}</span><span class="k">else</span><span class="p">{</span>
+        <span class="n">printf</span><span class="p">(</span><span class="s">&quot;parent s = %d</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span><span class="n">s</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">){</span>
+    <span class="kt">int</span> <span class="n">var</span><span class="p">;</span>
+    <span class="n">var</span> <span class="o">=</span> <span class="mi">89</span><span class="p">;</span>
+    <span class="n">test_fork</span><span class="p">();</span>
+
+    <span class="n">printf</span><span class="p">(</span><span class="s">&quot;out test vfork</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">);</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+
+
+<p>the consequence are:</p>
+<p><img alt="vfork2" src="/images/vfork2.png" /> </p>
+<p>modify line 13 to <code>exit(0)</code></p>
+<p>the consequence are:</p>
+<p><img alt="vfork2" src="/images/vfork3.png" /></p>
+<p>parent process and child process share the same address space, the stack address is also shared, return from function may mess the stack, so we should be carefully when using vfork syscall. </p>
+    </div>
+    <div id="footer">
+      <span>
+        <p>Copyright © 2018 .
+        Powered by <a href="http://simiki.org/" target="_blank">Simiki</a>.</p>
+        <p>Site Generated 2018-07-26 00:00:44</p>
+      </span>
+    </div>
+
+    
+    
+  </body>
+</html>
